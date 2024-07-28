@@ -1,0 +1,326 @@
+---
+title: "Superbowl Commercials"
+output:
+  pdf_document: default
+  html_document:
+    code_folding: show
+---
+![](https://athlonsports.com/.image/c_limit%2Ccs_srgb%2Cq_auto:good%2Cw_700/MTgyMDExNTY1NDYwNjI4ODA4/20-best-super-bowl-commercials-of-all-time.webp)
+
+# {.tabset}
+
+
+## Intro
+<h1>Introduction</h1>
+
+The Superbowl, the annual playoff championship game of the National Football League (NFL), is one
+of the biggest events in sports worldwide, averaging an audience of more than a hundred million
+viewers (112.3 million in 2020).
+
+As a result of its success, the cost of an advertisement during
+its airing is amongst the highest in the world, and the branches, investing more and more money
+in them, turned it into a worldwide event.
+
+Over the past years the superbowls status isn't just a championship match anymore.
+The tradition of a luxurious halftime show helped the match gain popularity. The popularity opened a big opportunity for companies to advertise themselves in front of tens of thousands fans in the stadium and millions at home in the USA and worldwide. 
+<h1>Goal</h1>
+
+The goal of our project is to study the different aspects of the Superbowl advertisings
+that influence on their success, using data such as categories, YouTube views and likes,
+cost of the ads, or year of broadcasting.
+
+We decided to focus on two main research questions that require using tests we have learned
+during the course:
+
+$1.$Chi-Square Test of Independence in R:
+
+Is there a relation between the number of categories a video includes and its ability to reach a 100k views?
+
+$H0$ - The number of categories and the ability to reach 100K views are not related.
+
+$H1$ - Else
+
+$2.$ Linear Regression:
+
+Is there a linear relation between the estimated cost of an ad and its number of likes on YouTube?
+
+$H0$ - There is no linear relation between the estimated cost and the number of likes on YouTube.
+
+$H1$ - There is linear relation between the estimated cost and the number of likes on YouTube.
+
+
+<h1>Important Variables</h1>
+
+$1.$Year - Year of first broadcasting.
+
+$2.$Brand - Name of the company that produced the ad.
+
+$3.$Estimated Cost - Estimated cost of the TV spot for the ad (in millions of dollars).
+
+$4.$YouTube Views - These are the views accumulated by every video on the YouTube Site. Note that
+the year influences the number of views, as older videos have been online for longer.
+
+$5.$Length - The length of an advertisement.
+
+$6.$Count_Categories - Variable that we'll calculate thanks to our data, this is the sum of categories
+listed for every video in the database.
+
+$7.$Above_100000_Views - A logical variable that will indicate if a commercial passed 100,000 views.
+
+## Importing Data
+
+<h1>Loading The Data</h1>
+First we import the libraries that we are planning to use.
+
+After that we import the excel data we downloaded from KAGGLE.
+
+The data we used was taken from KAGGLE, click [HERE](https://www.kaggle.com/datasets/paragzode/superbowl-commercial-challenge-analysis?select=superbowl_commercials.csv) to open the Dataset on KAGGLE.
+
+```{r setup and importing, include=TRUE}
+library(tidyverse)
+library(readxl)
+library(scales)
+library(ggcorrplot)
+library(knitr)
+library(kableExtra)
+superbowl_commercials <- read_excel("superbowl_commercials_dataset.xlsx")
+options(scipen=999)
+
+```
+
+<h1>Cleaning The Data</h1>
+First we exclude the rows with cells that have missing data (NA) and create a clean copy of the data.
+
+The clean data is stored in superbowl_commercials_clean.
+
+Then, we add two new columns, as explained previously :
+
+- Count_Categories
+- Above_100000_Views
+
+After the cleaning superbowl_commercials_clean stores 231 observations.
+```{r cleaning data}
+superbowl_commercials_clean<-na.omit(superbowl_commercials)
+
+superbowl_commercials_clean%>%mutate(Count_Categories=NA)
+
+superbowl_commercials_clean<-superbowl_commercials_clean %>%
+  mutate(Count_Categories = rowSums(superbowl_commercials_clean %>% select('Funny':'Uses Sex')))
+
+superbowl_commercials_clean%>%mutate(Above_100000_Views=NA)
+
+superbowl_commercials_clean<-superbowl_commercials_clean %>%
+  mutate('Above_100000_Views'=superbowl_commercials_clean %>% select(`Youtube Views`)>100000)
+
+```
+<h1>Clean Data</h1>
+
+```{r clean-data-preview}
+kable(superbowl_commercials_clean,caption="Clean Data")%>%
+  kable_styling("striped")%>%
+  scroll_box(width = "900px", height = "350px")
+```
+## Data Visualization
+
+The first graph is a representation of the YouTube views accumulated by every different brand and the median of views of each brand. We can see that Doritos is far ahead every other one.
+
+The visualization of the data is made possible by cutting the 5% most viewed videos, which were far up high and made the visualization much more difficult.
+
+
+```{r Visualizations}
+
+
+Graph_Views<-superbowl_commercials_clean
+
+cut_95 <- sort(Graph_Views$`Youtube Views`)[round(length(Graph_Views$`Youtube Views`) * 0.95)]  
+
+         
+data_95 <- Graph_Views[Graph_Views$`Youtube Views` <= cut_95, , drop = FALSE]     
+
+ggplot(data_95, aes(x=Brand, y=`Youtube Views`,color=Brand))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5,hjust=1))+geom_boxplot()
+```
+
+The second graph shows a representation of the YouTube views of every video by year, with colors illustrating the brands and the size of the points illustrating how much categories they fit in.
+
+We can see for example that accordingly to the first graph Doritos is far ahead of every other brand.
+
+Furthermore, we can observe that in general, videos of years 2005-2015 tend to have more views than the latest ones of years 2020 - except for a very few spots, and a Doritos ad buzzing high up there with more than 2 million views.
+
+```{r Visualizations 1}
+ggplot(data_95,aes(x=Year,y=`Youtube Views`,color=Brand,size=Count_Categories))+geom_point()
+
+```
+
+The representation of the categories count can make us doubt about a link between
+the success of the ads and the number of categories they fit in, 
+which is directly connected to the first question we will analyze in this project.
+
+## Independence Test (Chi-Test)
+<h1>Building The Independence Table</h1>
+
+1.We make a copy of the clean data using two columns : Count_Categories and Above_100000_Views, named reduced_table_for_test.
+
+2.Then we create two tables:
+
+- true_count_table- The table shows the number of ads that reach 100,000 views according to the number of categories they fit.
+                            
+- false_count_table- The table shows the number of ads that did not reach 100,000 views according to the number of categories they fit.
+                            
+3.Merge Both tables into one Independence Table.
+
+4.Merge the following categories :
+
+- Zero Categories - is combined with the the ads that fit one category.
+                            
+- Six Categories - is combined with the ads that fit five categories.
+                            
+The merge is preformed in order to fit the independence test demand - Expected[i][j]=>5.
+
+5.Fix the Independence table Categories that were changed as a result of the merges.
+
+6.View the independence table.
+
+```{r independence table}
+reduced_table_for_test<-superbowl_commercials_clean%>%select(Count_Categories:'Above_100000_Views')
+
+true_count_table<-reduced_table_for_test %>% 
+  group_by(Count_Categories) %>% 
+  summarise(TT = sum(Above_100000_Views==TRUE))
+
+false_count_table<-reduced_table_for_test %>% 
+  group_by(Count_Categories) %>% 
+  summarise(FF = sum(Above_100000_Views==FALSE))
+
+independence_table<-merge(x=true_count_table,y=false_count_table)
+
+independence_table[2,]<-independence_table[1,]+independence_table[2,]
+
+independence_table[6,]<-independence_table[6,]+independence_table[7,]
+
+
+independence_table<-independence_table[2:6,]
+
+independence_table[5:5,1:1]=5
+
+independence_table<-independence_table[1:5,1:3]
+
+independence_table
+```
+<h1>Preforming the Chi Test</h1>
+We preform the test on columns two and three which represent TRUE and FALSE.
+
+The result is:
+
+- Emp value = 9.488 
+
+- X - squared = 6.0396
+
+Accept H0 if the following demand is TRUE : Emp value > x - squared
+
+The demand is indeed TRUE so we accept $H0$ - The number of categories and the ability to reach 100K views are not related.
+```{r Chi Test}
+
+chisq.test(independence_table[2:3])
+
+
+```
+<h1>Plotting The Independence Table</h1>
+Differing the TRUE and FALSE Columns From their logical names for plotting :
+
+- TT - represents TRUE, the advertisement passed 100,000 views.
+
+- FF - represents FALSE, the advertisement did not reach 100,000 views.
+
+We see that the TRUE and FALSE distributions between the Categories are very similar to normal distribution.
+
+```{r Plot table}
+
+pivot_longer(independence_table,2:3) %>% 
+  ggplot() + geom_col(aes(x=Count_Categories,y=value,fill=name), position="dodge") + ylab(label="Ads Counted")+xlab(label="Number of Categories")
+
+
+```
+
+```{r 2, include=FALSE}
+
+companies_table<-superbowl_commercials_clean
+
+companies<-companies_table %>% 
+  distinct(Brand)
+companies
+
+above_100k<-companies_table %>% 
+  group_by(Brand) %>% 
+  summarise(Times_Advertised =sum(Above_100000_Views))
+
+above_100k<-above_100k[order(above_100k$Times_Advertised,decreasing = TRUE),]
+above_100k
+
+
+
+```
+
+## Regression
+<h1>Linear Relation Between Estimated Cost and YouTube Likes</h1>
+
+Lets check if there is a relation between the estimated cost of an ad and the amount of YouTube likes it accumulates.
+Since the number of likes per ad is very big, we decided to transform the Y axis by log10.
+
+The p-value of the output is less than 0.05 so we reject the H0, that means that there is a linear relation between estimated cost and YouTube likes.
+
+Although, the model we built does not explain the variance in the response variable well because the R^2 is very close to 0, and the residual standard error is huge.
+
+For every one million dollars added to the estimated cost, we expect the number of likes to grow by 1872.8 likes on average. The number of likes to be added is small because our model does not explain the relation.
+
+```{r Regression}
+
+regression_table<-superbowl_commercials_clean%>%select(`Estimated Cost`,`Youtube Likes`)
+
+Cost_Likes_lm <- lm(formula = regression_table$`Youtube Likes` ~ regression_table$`Estimated Cost`, data = regression_table)
+summary(Cost_Likes_lm)
+
+ggplot(regression_table,aes(x=`Estimated Cost`,y =`Youtube Likes`))+scale_y_log10()+
+  geom_point()+geom_smooth(formula=y~x,method = "lm")+
+  labs(title="Regression of Estimated Cost and YouTube Likes", x ="Estimated Cost", y = "YouTube Likes")
+```
+
+
+<h1> Linear Relation Between Estimated Cost and Length </h1>
+Since the previous model does not explain the linear relation, we want to build another model that explains well what happens when the estimated cost of a an advertisement rises by one million dollars. We decided to look at the relation between the estimated cost and length of an advertisement.
+
+The p-value of the output is less than 0.05 so we reject the H0, that means that there is a linear relation between estimated cost and length.
+
+The model we built does indeed explain the variance in the response variable well because the R^2 is very high (0.77), while the residual standard error is low.
+
+For every one million dollars added to the estimated cost the ads length extends by an average of 4.6103 seconds.
+
+```{r second regression}
+regression_table1<-superbowl_commercials_clean%>%select(`Estimated Cost`,Length)
+
+Cost_Likes_lm1 <- lm(formula = regression_table1$Length ~ regression_table1$`Estimated Cost`, data = regression_table1)
+summary(Cost_Likes_lm1)
+
+ggplot(regression_table1,aes(x=`Estimated Cost`,y =Length))+
+  geom_point()+geom_smooth(formula=y~x,method = "lm")+
+  labs(title="Regresssion of Estimated Cost and Length", x ="Estimated Cost", y = "Length")
+```
+
+## Conclusion
+<h1> Conclusion</h1>
+
+In this study we found that the ability of an advertisement to reach 100,000 views does not depend on the amount of categories it fits. 
+
+We also found that, even though the relation is weak and a well funded advertisement does not necessarily attract a high number of likes, there actually is a linear relationship between the estimated cost of an ad and the amount of YouTube likes it accumulates.
+
+In addition to that, we did find that there is a strong relation between the estimated cost of an ad and its length. 
+The more a brand spends on an advertising, the more its length raises.
+
+## Authors
+
+<h1> Authors : </h1>
+- Ido Geminer, ID :
+- Jeremy Sprung, ID :
+- Hod Peretz, ID :
+
+- Picture source : https://athlonsports.com/.image/c_limit%2Ccs_srgb%2Cq_auto:good%2Cw_700/MTgyMDExNTY1NDYwNjI4ODA4/20-best-super-bowl-commercials-of-all-time.webp
